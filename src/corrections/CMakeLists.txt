@@ -24,6 +24,7 @@ set(src_list
     H_bond_correction_PM6_DH_Dispersion
     H_bond_correction_PM6_DH_type
     Hydrogen_bond_corrections
+    mlcorr
    )
 #-----------------------------------------------
 # Add a list of source files to the target

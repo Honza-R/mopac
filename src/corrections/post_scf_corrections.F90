@@ -22,8 +22,11 @@ subroutine post_scf_corrections(correction, l_grad)
 !
   use molkst_C, only : keywrd, E_disp, E_hb, E_hh, method_pm7, P_Hbonds, &
     method_pm6_dh_plus, method_pm6_dh2, method_pm6_d3h4, method_pm6_dh2x, method_pm6_d3h4x, &
-    method_pm6_d3, method_pm6_d3_not_h4, method_pm7_hh, method_pm7_minus, method_pm6_org, method_PM8
-  use common_arrays_C, only: dxyz
+    method_pm6_d3, method_pm6_d3_not_h4, method_pm7_hh, method_pm7_minus, method_pm6_org, method_PM8, &
+    numat
+  use common_arrays_C, only: dxyz, &
+    nat, coord
+  use mlcorr
   implicit none
   double precision, intent(out) ::  correction
   logical, intent (in) :: l_grad
@@ -67,6 +70,21 @@ subroutine post_scf_corrections(correction, l_grad)
 ! Cyclin-Dependent Kinase 2 Inhibition by Pyrazolo[1,5-a]pyrimidines" Curr. Comput.-Aid. Drug.
 ! 2013 , 9 (1), 118�129.
 !
+
+  !============================================================================
+  ! mlcorr variables
+    character(len=*), parameter :: FIFO_IN  = './fifo_in.tmp'
+    character(len=*), parameter :: FIFO_OUT = './fifo_out.tmp'
+
+    double precision :: energy
+    logical :: requestgrad = .true.
+    double precision, dimension(:,:), allocatable :: coordinates
+    double precision, dimension(:,:), allocatable :: gradient
+
+    integer :: i, c
+
+  !============================================================================
+
   prt = (index(keywrd," 0SCF ") + index(keywrd," PRT ") /= 0 .and. index(keywrd," DISP") /= 0)
   correction = 0.d0
   E_hb       = 0.d0
@@ -122,6 +140,72 @@ subroutine post_scf_corrections(correction, l_grad)
     correction = correction + PM6_DH_Dispersion(l_grad)
     correction = correction + Hydrogen_bond_corrections(l_grad, prt)
   end if
+
+  !============================================================================
+  ! mlcorr call
+
+  !#!# Gradient is called from forces/deriv.F90
+  !#!# only when some correction is added in the input
+
+  requestgrad = l_grad
+
+  ! Allocate arrays
+  allocate(coordinates(numat, 3))
+  if (requestgrad) then
+    allocate(gradient(numat, 3))
+  end if
+
+
+  ! Copy elements in format used by mlcorr
+  do i = 1, numat
+      do c = 1, 3
+          coordinates(i,c) = coord(c,i)
+      end do
+  end do
+
+  ! Check fifos
+  call check_fifo(FIFO_IN)
+  call check_fifo(FIFO_OUT)
+
+  ! Call the correction
+  call write_coords(FIFO_OUT, numat, nat, coordinates, requestgrad)
+  call get_results(FIFO_IN, numat, energy, requestgrad, gradient)
+
+!  write(*,*) "Energy: ", energy
+!  if (requestgrad) then
+!      write(*,*) "Gradient:"
+!      do i = 1, numat
+!          do c = 1, 3
+!              write(*,"(F10.3)", advance="no") gradient(i,c)
+!          end do
+!          write(*,*) ""
+!      end do
+!  end if
+
+  ! Apply correction
+  correction = correction + energy
+
+  ! Apply correction to gradient
+  !write(*,*) l_grad
+  !write(*,*) size(dxyz)
+  !write(*,*) dxyz
+  !write(*,*) "-------"
+  if (requestgrad) then
+    do i = 0, numat-1
+        do c = 1,3
+          dxyz(c+i*3) = dxyz(3*i+c) + gradient(i+1,c)
+        end do
+    end do
+  end if
+
+  ! Deallocate
+  deallocate(coordinates)
+  if (requestgrad) then
+    deallocate(gradient)
+  end if
+
+  !============================================================================
+
   if (index(keywrd, " SILENT") == 0) then
     if (prt .and. P_Hbonds > 0) call print_post_scf_corrections
   end if
