@@ -238,7 +238,8 @@
           call geout(iw)
         end if
       end if
-      if (DH_correction) call post_scf_corrections(sum, .true.)
+      !if (DH_correction)
+      call post_scf_corrections(sum, .true.)
 !
 !   THE CARTESIAN DERIVATIVES ARE IN DXYZ
 !
