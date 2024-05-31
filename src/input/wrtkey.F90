@@ -1861,6 +1861,9 @@ subroutine wrtwor (allkey)
   if (myword(allkey, " WILLIA"))     write (iw,'(" *  WILLIAMS   - USE WILLIAMS SURFACE")')
   if (myword(allkey, " INT "))       write (iw,'(" *  INT        - INTERNAL COORDINATE SYSTEM TO BE USED")')
   if (myword(allkey, " PECI"))       write (iw,'(" *  PECI       - SINGLE AND PAIRED ELECTRON", " EXCITATIONS ONLY")')
+  ! ML correction interface keywords
+  if (myword(allkey, " MLCORR"))      write (iw,'(" *  MLCORR     - LOAD EXTERNAL ML CORRECTION ")')
+  ! ML correction end
 !
 ! Number of threads
 !
