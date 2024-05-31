@@ -147,63 +147,66 @@ subroutine post_scf_corrections(correction, l_grad)
   !#!# Gradient is called from forces/deriv.F90
   !#!# only when some correction is added in the input
 
-  requestgrad = l_grad
-
-  ! Allocate arrays
-  allocate(coordinates(numat, 3))
-  if (requestgrad) then
-    allocate(gradient(numat, 3))
-  end if
-
-
-  ! Copy elements in format used by mlcorr
-  do i = 1, numat
-      do c = 1, 3
-          coordinates(i,c) = coord(c,i)
-      end do
-  end do
-
-  ! Check fifos
-  call check_fifo(FIFO_IN)
-  call check_fifo(FIFO_OUT)
-
-  ! Call the correction
-  call write_coords(FIFO_OUT, numat, nat, coordinates, requestgrad)
-  call get_results(FIFO_IN, numat, energy, requestgrad, gradient)
-
-!  write(*,*) "Energy: ", energy
-!  if (requestgrad) then
-!      write(*,*) "Gradient:"
-!      do i = 1, numat
-!          do c = 1, 3
-!              write(*,"(F10.3)", advance="no") gradient(i,c)
-!          end do
-!          write(*,*) ""
-!      end do
-!  end if
-
-  ! Apply correction
-  correction = correction + energy
-
-  ! Apply correction to gradient
-  !write(*,*) l_grad
-  !write(*,*) size(dxyz)
-  !write(*,*) dxyz
-  !write(*,*) "-------"
-  if (requestgrad) then
-    do i = 0, numat-1
-        do c = 1,3
-          dxyz(c+i*3) = dxyz(3*i+c) + gradient(i+1,c)
+  if (index(keywrd, " MLCORR") /= 0) then
+    requestgrad = l_grad
+  
+    ! Allocate arrays
+    allocate(coordinates(numat, 3))
+    if (requestgrad) then
+      allocate(gradient(numat, 3))
+    end if
+  
+  
+    ! Copy elements in format used by mlcorr
+    do i = 1, numat
+        do c = 1, 3
+            coordinates(i,c) = coord(c,i)
         end do
     end do
-  end if
+  
+    ! Check fifos
+    call check_fifo(FIFO_IN)
+    call check_fifo(FIFO_OUT)
+  
+    ! Call the correction
+    call write_coords(FIFO_OUT, numat, nat, coordinates, requestgrad)
+    call get_results(FIFO_IN, numat, energy, requestgrad, gradient)
+  
+  !  write(*,*) "Energy: ", energy
+  !  if (requestgrad) then
+  !      write(*,*) "Gradient:"
+  !      do i = 1, numat
+  !          do c = 1, 3
+  !              write(*,"(F10.3)", advance="no") gradient(i,c)
+  !          end do
+  !          write(*,*) ""
+  !      end do
+  !  end if
+  
+    ! Apply correction
+    correction = correction + energy
+  
+    ! Apply correction to gradient
+    !write(*,*) l_grad
+    !write(*,*) size(dxyz)
+    !write(*,*) dxyz
+    !write(*,*) "-------"
+    if (requestgrad) then
+      do i = 0, numat-1
+          do c = 1,3
+            dxyz(c+i*3) = dxyz(3*i+c) + gradient(i+1,c)
+          end do
+      end do
+    end if
+  
+    ! Deallocate
+    deallocate(coordinates)
+    if (requestgrad) then
+      deallocate(gradient)
+    end if
 
-  ! Deallocate
-  deallocate(coordinates)
-  if (requestgrad) then
-    deallocate(gradient)
   end if
-
+  ! end mlcorr call
   !============================================================================
 
   if (index(keywrd, " SILENT") == 0) then
