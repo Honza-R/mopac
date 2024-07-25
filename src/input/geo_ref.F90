@@ -253,7 +253,7 @@
       goto 97
 99    write(iw,*)" File' "//trim(line)//"' is faulty"
       return
-97    i = quoted('GEO_REF=') + 11
+97    i = quoted('GEO_REF=')
       do
         if (keywrd_quoted(i:i) == '"' .or. keywrd_quoted(i:i) == "'") exit
         i = i + 1
@@ -420,6 +420,35 @@
               end if
             end if
           end do
+        end if
+!
+!   Delete all atoms except those in the backbone
+!
+        if (index(keywrd, " COMPARE(BACKBONE)") /= 0) then
+          j = 0
+          do i = 1, numat
+            continue
+            if (txtatm(i)(13:15) == " N " .or. txtatm(i)(13:15) == " CA" .or. txtatm(i)(13:15) == " C ") then
+              j = j + 1
+              txtatm(j) = txtatm(i)
+              geoa(:,j) = geoa(:,i)
+              labels(j) = labels(i)
+            end if
+          end do
+          j = 0
+          do i = 1, numat
+            if (txtatm1(i)(13:15) == " N " .or. txtatm1(i)(13:15) == " CA" .or. txtatm1(i)(13:15) == " C ") then
+              j = j + 1
+              txtatm1(j) = txtatm1(i)
+              geo(:,j) = geo(:,i)
+              nat(j) = nat(i)
+            end if
+          end do
+          numat = j
+          ii = numat
+!
+!   End of delete atoms
+!
         end if
         swap = (index(keywrd, " NOSWAP") == 0)
         k = 0

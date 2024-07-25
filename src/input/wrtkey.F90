@@ -17,7 +17,7 @@
 subroutine wrtkey
   use molkst_C, only : moperr, allkey, keywrd
   implicit none
-  integer :: i, j, k, l
+  integer :: i, j, k, l, m
   integer, parameter :: n_protected_keywords = 14
   character :: protected_keywords(n_protected_keywords)*10
   data protected_keywords /"SITE=", "C.I.=", "I.D.=", "METAL=", "POLAR=", &
@@ -88,14 +88,30 @@ subroutine wrtkey
     do
       i = index(keywrd(j:), " "//trim(protected_keywords(k))) + j
       if (i == j) exit
-      j = index(keywrd(i:), ") ")
-      l = index(keywrd(i:), '" ')
+      m = i + len_trim(protected_keywords(k)) 
+      if (keywrd(m:m) == "(" .or. keywrd(m - 1:m - 1) == "(") then
+!
+! Keyword starts with "(" so search for closing ")"
+!
+        j = 1
+        do
+          m = m + 1
+          if (keywrd(m:m) == "(") j = j + 1
+          if (keywrd(m:m) == ")") j = j - 1
+          if (j == 0) exit
+        end do
+        j = m   
+        l = 1000
+      else
+        l = index(keywrd(i:), ' ') 
+        l = index(keywrd(i:l), '" ')    
+        if (l == 0) exit
+      endif
       if (j > 0 .and. l > 0) then
         j = min(j,l)
       else if (l > 0) then
         j = l
       end if
-      j = j + i
       allkey(i - 1:j) = keywrd(i - 1:j)
     end do
   end do
@@ -749,13 +765,13 @@ subroutine wrtchk (allkey)
        !
        !    DUMMY IF STATEMENT TO REMOVE AMPERSAND, PLUS SIGNS AND OBSOLETE KEYWORDS, IF PRESENT
        !
-      if (myword(allkey, " SETUP"))       i = 1
-      if (myword(allkey, "&"))            i = 2
-      if (myword(allkey, " +"))           i = 3
-      if (myword(allkey, " CONTROL"))     i = 3
-      if (myword(allkey, " DIIS"))    write (iw,'(" *  DIIS       - THIS IS AN OBSOLETE KEYWORD, IT WILL BE IGNORED")')
-      if (myword(allkey, " NODIIS"))  write (iw,'(" *  NODIIS     - THIS IS AN OBSOLETE KEYWORD, IT WILL BE IGNORED")')
-      if (myword(allkey, " ROT"))     write (iw,'(" *  ROT        - THIS IS AN OBSOLETE KEYWORD, IT WILL BE IGNORED")')
+      if (myword(allkey, " SETUP")    ) i = 1
+      if (myword(allkey, " &")        ) write (iw,'(" *  &          - THIS IS A DEPRECATED KEYWORD, USE "" ++ "" INSTEAD")')
+      if (myword(allkey, " +")        ) write (iw,'(" *  +          - THIS IS A DEPRECATED KEYWORD, USE "" ++ "" INSTEAD")')
+      if (myword(allkey, " CONTROL")  ) i = 2
+      if (myword(allkey, " DIIS")     ) write (iw,'(" *  DIIS       - THIS IS AN OBSOLETE KEYWORD, IT WILL BE IGNORED")')
+      if (myword(allkey, " NODIIS")   ) write (iw,'(" *  NODIIS     - THIS IS AN OBSOLETE KEYWORD, IT WILL BE IGNORED")')
+      if (myword(allkey, " ROT")      ) write (iw,'(" *  ROT        - THIS IS AN OBSOLETE KEYWORD, IT WILL BE IGNORED")')
       if (myword(allkey, " HEADER") .or. myword(allkey, " USER"))  then
         write (iw,'(" *  HEADER     - DATA SET IS IN PROTEIN DATA BANK FORMAT")')
         i = index(keywrd, " HEADER")
@@ -857,7 +873,7 @@ subroutine wrtcon (allkey)
   if (myword(allkey, " PM6 "))   write (iw, '(" *  PM6        - The PM6 Hamiltonian to be used")')
   if (myword(allkey, " PM7-TS")) write (iw, '(" *  PM7-TS     - Calculate barrier height using PM7-TS")')
   if (myword(allkey, " PM7"))    write (iw, '(" *  PM7        - The PM7 Hamiltonian to be used")')
-  if (myword(allkey, " PM6-ORG"))write (iw, '(" *  PM6-ORG    - The PM6-ORG Hamiltonian to be used (IN DEVELOPMENT)")')
+  if (myword(allkey, " PM6-ORG"))write (iw, '(" *  PM6-ORG    - The PM6-ORG Hamiltonian to be used")')
   if (myword(allkey, " PM8"))    write (iw, '(" *  PM8        - The PM8 Hamiltonian to be used (IN DEVELOPMENT)")')
   if (myword(allkey, " SPARKL")) write (iw, '(" *  SPARKLE    - Use SPARKLES when they exist.")')
   if (myword(allkey, " RM1 "))   write (iw, '(" *  RM1        - The RM1 Hamiltonian to be used")')
@@ -877,7 +893,7 @@ subroutine wrtcon (allkey)
 !
   if (myword(allkey, "QMMM "))   write (iw, '(" *  QMMM       - Generate energies and gradients for use in MM codes")')
   if (myword(allkey, " COMPAR")) write (iw, '(" *  COMPARE    - Compare two geometries")')
-  if (myword(allkey, " BRZ"))    write (iw, '(" *  BRZ         - Write file <name>.brz for use by program BZ")')
+  if (myword(allkey, " BZ"))     write (iw, '(" *  BZ         - Write file <name>.brz for use by program BZ")')
   if (myword(allkey, " BIRAD"))  write (iw, '(" *  BIRADICAL  - SYSTEM HAS TWO UNPAIRED ELECTRONS")')
   if (myword(allkey, " EXCI"))   write (iw, '(" *  EXCITED    - FIRST EXCITED STATE IS TO BE OPTIMIZED")')
   if (myword(allkey, " VELO"))   write (iw, '(" *  VELOCITY   - INPUT STARTING VELOCITIES FOR DRC")')
@@ -993,18 +1009,23 @@ subroutine wrtcon (allkey)
       write(iw,'(a)') " *               (NO BIAS TOWARDS THE REFERENCE GEOMETRY WILL BE APPLIED)"
     else
       sum = reada(keywrd_quoted(j:), 1)
-      if (sum < 0.001d0) then
+      if (sum < 1.d-15) then
         write(iw,'(a)') " *               (NO BIAS TOWARDS THE REFERENCE GEOMETRY WILL BE APPLIED)"
       else
         i = nint(log10(sum))
-        num = char(ichar("4") + abs(i))
-        if (i < 0) then
-          num1 = char(ichar("1") - i)
-        else
-          num1 = "1"
+        if (abs(i) > 5) then
+          write(iw,'(a, g11.4, a)') " *               (A BIAS OF",sum, &
+          " KCAL/MOL/ANGSTROM^2 TOWARDS THE REFERENCE GEOMETRY WILL BE APPLIED)"
+        else         
+          num = char(ichar("4") + abs(i))
+          if (i < 0) then
+            num1 = char(ichar("1") - i)
+          else
+            num1 = "1"
+          end if 
+          write(iw,'(a, f'//num//'.'//num1//', a)') " *               (A BIAS OF",sum, &
+          " KCAL/MOL/ANGSTROM^2 TOWARDS THE REFERENCE GEOMETRY WILL BE APPLIED)"
         end if
-        write(iw,'(a, f'//num//'.'//num1//', a)') " *               (A BIAS OF",sum, &
-        " KCAL/MOL/ANGSTROM^2 TOWARDS THE REFERENCE GEOMETRY WILL BE APPLIED)"
       end if
     end if
   end if
@@ -1147,6 +1168,17 @@ subroutine wrtcon (allkey)
     end do
   end if
   line = trim(allkey)
+  i = 0
+  if (myword(line, " OPT-")) i = i + 1
+  if (myword(line, " OPT ")) i = i + 1
+  if (myword(line, " OPT(")) i = i + 1
+  if (myword(line, " OPT=")) i = i + 1
+  if (i > 1) then
+    call mopend("MORE THAN ONE TYPE OF ""OPT"" REQUESTED. THIS IS NOT ALLOWED")
+    write(iw,'(/10x,a,//,a,/)')"KEYWORDS SUPPLIED:", trim(keywrd)
+    return
+  end if
+  line = trim(allkey)
   if (myword(allkey, " OPT-") .or. myword(allkey, " OPT ") .or. myword(allkey, " OPT(") &
     .or. myword(allkey, " OPT="))   then
     i = index(line, " OPT=")
@@ -1219,7 +1251,7 @@ subroutine wrtcon (allkey)
       pressure = reada (keywrd, Index (keywrd, " P="))
       if (id == 1) then
         write (iw, '(" *  P=         - TENSION IN POLYMER=", g13.6, " NEWTONS PER MOLE")') pressure
-        pressure = -pressure * 10.d0 ** (-13) / 4.184d0
+        pressure = pressure * 10.d0 ** (-13) / 4.184d0
       else if (id == 2) then
       else if (id == 3) then
         i = Index (keywrd, " P=")
@@ -1238,7 +1270,7 @@ subroutine wrtcon (allkey)
 !  Divide by 4184 to convert from J/M**3/mol to Kcal/M**3/mol
 !  Divide by 10**30 to convert from Kcal/M**3/mol to Kcal/Angstrom**3/mol
 !
-        pressure = -(fpcref(1,10)*pressure) / (4184.d0*10.d0**30)
+        pressure = (fpcref(1,10)*pressure) / (4184.d0*10.d0**30)
       else
         write (iw, *) " Keyword 'P=n.nn' is not allowed here"
         call mopend("Keyword 'P=n.nn' is not allowed here")
@@ -1588,7 +1620,7 @@ subroutine wrtout (allkey)
   double precision, external :: reada
   intrinsic Index, Nint
   if (myword(allkey, " PRTINT"))  write (iw,'(" *  PRTINT     - INTERATOMIC DISTANCES TO BE PRINTED")')
-  if (myword(allkey, " PRTCHAR")) write (iw,'(" *  PRTCHARGE  - PRINT CHARGES IN ARC FILE")')
+  if (myword(allkey, " PRTCHAR")) write (iw,'(" *  PRTCHARGE  - PRINT CHARGES IN ARC FILE AND PDB OUTPUT")')
   if (index(allkey, " AUX") > 0) then
     i = index(allkey, " AUX(") + 1
     if (i > 1) then

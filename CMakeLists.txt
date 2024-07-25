@@ -30,6 +30,25 @@ endif()
 file(READ "CITATION.cff" CITATION)
 string(REGEX MATCH "[^-]version: ([0-9\.]*)" _ ${CITATION})
 
+# Code coverage option
+option(ENABLE_COVERAGE "Code coverage flag" OFF)
+
+# Set a safe default build type if there is no user input
+if(NOT CMAKE_BUILD_TYPE)
+  if (ENABLE_COVERAGE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+  else()
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  endif()
+else()
+# otherwise, check conflict with ENABLE_COVERAGE
+  if(ENABLE_COVERAGE AND NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    message(FATAL_ERROR "Option ENABLE_COVERAGE requires CMAKE_BUILD_TYPE=Debug")
+  endif()
+endif()
+
+message(STATUS "Build type is ${CMAKE_BUILD_TYPE}")
+
 # Specify project name & programming languages
 project(openmopac VERSION ${CMAKE_MATCH_1} LANGUAGES Fortran)
 
@@ -55,29 +74,11 @@ option(STATIC_BUILD "Build a static executable" OFF)
 if (STATIC_BUILD)
   message(STATUS "Static executables")
   message(WARNING "CMake cannot verify the ability to link static executables in the pre-build phase. "
-    "Please verify that you are able to link static executables with a \"-static\" linker flag.")
+    "Please verify that you are able to link static executables with a \"-static\" linker flag. "
+    "OpenMP does not support static builds by default, so try THREADS_KEYWORD=OFF if the static build fails to turn off OpenMP.")
 else()
   message(STATUS "Shared library and dynamic executables")
 endif()
-
-# Code coverage option
-option(ENABLE_COVERAGE "Code coverage flag" OFF)
-
-# Set a safe default build type if there is no user input
-if(NOT CMAKE_BUILD_TYPE)
-  if (ENABLE_COVERAGE)
-    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
-  else()
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-  endif()
-else()
-# otherwise, check conflict with ENABLE_COVERAGE
-  if(ENABLE_COVERAGE AND NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    message(FATAL_ERROR "Option ENABLE_COVERAGE requires CMAKE_BUILD_TYPE=Debug")
-  endif()
-endif()
-
-message(STATUS "Build type is ${CMAKE_BUILD_TYPE}")
 
 # location for CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -116,24 +117,19 @@ endif()
 # Add CITATION.cff to source files so that version updates are not ignored
 target_sources(mopac-core PRIVATE CITATION.cff)
 
-# WinMOPAC build on Windows w/ the Intel Fortran compiler
-option(BUILD_WINMOPAC "Build MOPAC & BZ with QuickWin GUI (ifort required)" OFF)
-if(BUILD_WINMOPAC)
+# BZ build on Windows w/ the Intel Fortran compiler
+option(BUILD_BZ "Build BZ with QuickWin GUI (ifort required)" OFF)
+if(BUILD_BZ)
   if(NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel"))
-    message(FATAL_ERROR "WinMOPAC compilation requires the Intel Fortran compiler (ifort)")
+    message(FATAL_ERROR "BZ compilation requires the Intel Fortran compiler (ifort)")
   endif()
   if(NOT WIN32)
-    message(FATAL_ERROR "WinMOPAC is only available on Windows")
+    message(FATAL_ERROR "BZ is only available on Windows")
   endif()
-  add_executable(mopac-win)
-  target_link_libraries(mopac-win mopac-core)
-  target_compile_options(mopac-win PRIVATE /libs:qwin)
-  target_link_options(mopac-win PRIVATE /subsystem:windows)
   add_executable(mopac-bz)
   target_compile_options(mopac-bz PRIVATE /libs:qwin)
   target_link_options(mopac-bz PRIVATE /subsystem:windows)
   if (STATIC_BUILD)
-    target_link_options(mopac-win PUBLIC "-static")
     target_link_options(mopac-bz PUBLIC "-static")
   endif()
 endif()
@@ -168,15 +164,16 @@ endif()
 if(F2003_INTRINSICS)
   target_compile_definitions(mopac-core PRIVATE MOPAC_F2003)
   target_compile_definitions(mopac-makpol PRIVATE MOPAC_F2003)
-  if(BUILD_WINMOPAC)
-    target_compile_definitions(mopac-win PRIVATE MOPAC_F2003)
+  if(BUILD_BZ)
     target_compile_definitions(mopac-bz PRIVATE MOPAC_F2003)
   endif()
 endif()
 
 # Pass version & commit information to MOPAC's Fortran source
 target_compile_definitions(mopac-core PRIVATE MOPAC_VERSION_FULL="${PROJECT_VERSION}")
-execute_process(COMMAND git rev-parse HEAD OUTPUT_VARIABLE GIT_HASH)
+if(NOT GIT_HASH)
+  execute_process(COMMAND git rev-parse HEAD OUTPUT_VARIABLE GIT_HASH)
+endif()
 if(GIT_HASH)
   string(STRIP ${GIT_HASH} GIT_HASH)
   target_compile_definitions(mopac-core PRIVATE MOPAC_GIT_HASH="${GIT_HASH}")
@@ -258,6 +255,10 @@ option(TESTS "Enable tests (needs Python3 and Numpy)" ON)
 if(TESTS)
   find_package (Python3 COMPONENTS Interpreter NumPy)
   if(NOT Python3_FOUND)
+    if(Python3_Interpreter_FOUND AND (NOT Python3_NumPy_FOUND))
+      message(NOTICE "Python3 found without NumPy at path: ${Python3_EXECUTABLE}\n"
+              "(HINT: install NumPy for this Python3 instance with pip or give higher priority to an instance with NumPy installed)")
+    endif()
     message(FATAL_ERROR "Python3 and Numpy are required for MOPAC testing (testing can be disabled with -DTESTS=OFF)")
   endif()
   enable_testing()
@@ -285,7 +286,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     if(INTEL_OMP_DLL STREQUAL "INTEL_OMP_DLL-NOTFOUND")
       message("WARNING: Cannot locate Intel's OpenMP dll for packaging")
     endif()
-    install(PROGRAMS ${INTEL_OMP_DLL} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT qtifw EXCLUDE_FROM_ALL)
+    install(PROGRAMS ${INTEL_OMP_DLL} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT redist EXCLUDE_FROM_ALL)
   else()
     find_library(INTEL_OMP_LIB iomp5 HINT CMAKE_Fortran_COMPILER PATH_SUFFIXES ../../compiler/lib ../../compiler/lib/intel64_lin)
     if(INTEL_OMP_LIB STREQUAL "INTEL_OMP_LIB-NOTFOUND")
@@ -316,13 +317,12 @@ install(FILES "${CMAKE_SOURCE_DIR}/CITATION.cff"
 
 # Install the executables and library
 install(TARGETS mopac RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT main)
-install(TARGETS mopac-param RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT extra)
-install(TARGETS mopac-makpol RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT extra)
+install(TARGETS mopac-param RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT main)
+install(TARGETS mopac-makpol RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT main)
 if(WIN32)
   install(TARGETS mopac-core RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT main)
-  if(BUILD_WINMOPAC)
-#    install(TARGETS mopac-win RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT extra)
-    install(TARGETS mopac-bz RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT extra)
+  if(BUILD_BZ)
+    install(TARGETS mopac-bz RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT main)
   endif()
 else()
   install(TARGETS mopac-core LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT main)
@@ -336,6 +336,5 @@ cpack_ifw_configure_component(main DISPLAY_NAME "main program" SORTING_PRIORITY 
   "secondary license terms (GPL3)" "${CMAKE_SOURCE_DIR}/COPYING"
   SCRIPT "${CMAKE_SOURCE_DIR}/.github/qtifw_component.qs"
   USER_INTERFACES "${CMAKE_SOURCE_DIR}/.github/pathcheckboxform.ui" "${CMAKE_SOURCE_DIR}/.github/filecheckboxform.ui" "${CMAKE_SOURCE_DIR}/.github/iconcheckboxform.ui")
-cpack_ifw_configure_component(extra DISPLAY_NAME "extra utilities" SORTING_PRIORITY 1 DEFAULT FALSE)
 cpack_ifw_configure_component(qtifw VIRTUAL FORCED_INSTALLATION)
 cpack_ifw_configure_component(redist VIRTUAL FORCED_INSTALLATION)

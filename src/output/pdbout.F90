@@ -27,13 +27,14 @@ subroutine pdbout (mode1)
 !
     character :: ele_pdb*2, idate*24, num*1, x*1
     integer :: i, i1, i2, iprt, k, nline
-    logical :: ter, html, ter_ok, l_irc_drc
+    logical :: ter, html, ter_ok, l_irc_drc, charge
     double precision :: sum
     intrinsic Abs, Char, Ichar
     double precision, allocatable :: q2(:), coord(:,:)
 !
     html = (index(keywrd, " HTML") /= 0)
     ter_ok = (index(keywrd, " NOTER") == 0)
+    charge = (index(keywrd, " PRTCHAR") /= 0)
     l_irc_drc = (index(keywrd, " IRC") + index(keywrd, " DRC") /= 0)
     ter = .false.
     allocate (q2(numat), coord(3, natoms))
@@ -156,8 +157,8 @@ subroutine pdbout (mode1)
       nline = nline + 1
       if (ter_ok) ter = (i == breaks(nbreaks))
       if (ter) nbreaks = nbreaks + 1
-      if (i1 == 0) cycle
-      if ( .not. l_atom(i1)) cycle
+      if (i1 == 0 .and. i /= 1) cycle
+      if ( .not. l_atom(max(1,i1))) cycle
       if (elemnt(labels(i)) (1:1) == " " .or. labels(i) == 99) then
         ele_pdb(1:1) = " "
         ele_pdb(2:2) = elemnt(labels(i)) (2:2)
@@ -175,8 +176,13 @@ subroutine pdbout (mode1)
       x = txtatm(i)(13:13)
       if (x == "X") txtatm(i)(13:13) = " "
       if (txtatm(i)(14:14) /= "X") then
-      write (iprt, "(a,i5,a,f1"//num//".3,f8.3,f8.3,a,f7.2,a, a2,a)") txtatm(i)(1:6),i2,txtatm(i)(12:maxtxt), &
-        & (coord(k, i), k=1, 3), "  1.0",q2(i1)*10.d0,"      PROT", ele_pdb, " "
+        if (charge) then
+          write (iprt, "(a,i5,a,f1"//num//".3,f8.3,f8.3,a,f7.2,f10.3, a2,a)") txtatm(i)(1:6),i2,txtatm(i)(12:maxtxt), &
+          & (coord(k, i), k=1, 3), "  1.0", 0.d0, q2(i1), ele_pdb, " "
+        else
+          write (iprt, "(a,i5,a,f1"//num//".3,f8.3,f8.3,a,f7.2,a, a2,a)") txtatm(i)(1:6),i2,txtatm(i)(12:maxtxt), &
+          & (coord(k, i), k=1, 3), "  1.0",q2(i1)*10.d0,"      PROT", ele_pdb, " "
+        end if
       else
         write (iprt, "(a,i5,a,f1"//num//".3,f8.3,f8.3,a,f7.2,a, a2,a)") txtatm(i)(1:6),i2,txtatm(i)(12:maxtxt), &
         & (coord(k, i), k=1, 3), "  1.0 ",0.d0,"      PROT", ele_pdb, " "
@@ -226,6 +232,7 @@ subroutine pdbout (mode1)
       do i = 1, natoms - id
         if (txtatm(i)(1:4) == "ATOM") l_het_only = .false.
         if (txtatm(i)(18:20) == "HOH") cycle
+        if (txtatm(i)(18:20) == "WAT") cycle
         if (txtatm(i)(18:20) == "DOD") cycle
         if (txtatm(i)(18:20) == "SO4") cycle
         j = nint(reada(txtatm(i), 23))
