@@ -77,7 +77,7 @@
         field = index(keywrd,' FIELD') /= 0
         precis = index(keywrd,' PRECISE') /= 0
         DH_correction = (index(keywrd,' PM6-D') + index(keywrd,' PM6-H') /= 0 .or. &
-          method_PM7 .or. method_pm6_org .or. method_pm8 )
+          method_PM7 .or. method_pm6_org .or. method_pm8 ) .or. index(keywrd, " MLCORR") /= 0
         intn = index(keywrd,'  XYZ') == 0
         if (saddle) then
           nw2 = max(mpack, 9*natoms**2)
