@@ -1,6 +1,6 @@
 # Molecular Orbital PACkage (MOPAC) with PM6-ML support
 
-[![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Branch description
 
@@ -10,4 +10,9 @@ For more information on MOPAC and instructions on compilation, see the README of
 
 ## Citation
 
-To cite the use of open-source MOPAC in scientific publications, see the `CITATION.cff` file in this repository.
+The recommended citation of open-source MOPAC in scientific publications is its archival copy on Zenodo at
+[DOI:10.5281/zenodo.6511958](https://doi.org/10.5281/zenodo.6511958).
+
+
+The PM6-ML method is described in the paper:<br>
+Nováček M., Řezáč J., *J. Chem. Theory Comput.* **2005**, 21, 2, 678-690. [DOI: 10.1021/acs.jctc.4c01330](https://doi.org/10.1021/acs.jctc.4c01330)
