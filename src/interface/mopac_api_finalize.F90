@@ -214,7 +214,7 @@ contains
             valenc = valenc + 2.d0 * p(kk)
           end do
         end if
-        if (valenc > 0.01d0) then 
+        if (valenc > 0.01d0) then
             kk = bond_index(i) + 1
             bond_atom(kk) = j - 1
             bond_order(kk) = valenc
